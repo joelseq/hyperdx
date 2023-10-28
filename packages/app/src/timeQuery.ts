@@ -20,7 +20,7 @@ import { format, sub, startOfSecond, isValid } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import { usePrevious } from './utils';
 
-const LIVE_TAIL_TIME_QUERY = 'Live Tail';
+export const LIVE_TAIL_TIME_QUERY = 'Live Tail';
 const LIVE_TAIL_REFRESH_INTERVAL_MS = 4000;
 
 const formatDate = (
@@ -529,4 +529,45 @@ export function useNewTimeQuery({
 export function getLiveTailTimeRange(): [Date, Date] {
   const end = startOfSecond(new Date());
   return [sub(end, { minutes: 15 }), end];
+}
+
+export function useLiveTail({
+  initialValue,
+  setTimeRange,
+}: {
+  initialValue: boolean;
+  setTimeRange: (start: Date, end: Date) => void;
+}): {
+  isLive: boolean;
+  setIsLive: Dispatch<SetStateAction<boolean>>;
+} {
+  const [isLive, setIsLive] = useState(initialValue);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | undefined = undefined;
+    const refreshLiveTailTimeRange = () => {
+      const [start, end] = getLiveTailTimeRange();
+      setTimeRange(start, end);
+    };
+
+    if (isLive) {
+      refreshLiveTailTimeRange();
+      interval = setInterval(
+        refreshLiveTailTimeRange,
+        LIVE_TAIL_REFRESH_INTERVAL_MS,
+      );
+    }
+
+    return () => {
+      if (interval != null) {
+        clearInterval(interval);
+        interval = undefined;
+      }
+    };
+  }, [isLive, setTimeRange]);
+
+  return {
+    isLive,
+    setIsLive,
+  };
 }

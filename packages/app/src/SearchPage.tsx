@@ -42,7 +42,12 @@ import SearchInput from './SearchInput';
 import SaveSearchModal from './SaveSearchModal';
 import CreateLogAlertModal from './CreateLogAlertModal';
 import SearchPageActionBar from './SearchPageActionBar';
-import { useTimeQuery } from './timeQuery';
+import {
+  getLiveTailTimeRange,
+  LIVE_TAIL_TIME_QUERY,
+  useLiveTail,
+  useNewTimeQuery,
+} from './timeQuery';
 import { MemoPatternTableWithSidePanel } from './PatternTableWithSidePanel';
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -378,9 +383,15 @@ const LogViewerContainer = memo(function LogViewerContainer({
   );
 });
 
+const getQueryParams = (): URLSearchParams => {
+  return new URL(window.location.href).searchParams;
+};
+
 export default function SearchPage() {
   const router = useRouter();
   const savedSearchId = router.query.savedSearchId;
+  console.log(`Router: ${JSON.stringify(router.query)}`);
+  console.log(`Router: ${router.route}`);
 
   const [resultsMode, setResultsMode] = useState<'search' | 'patterns'>(
     'search',
@@ -389,14 +400,27 @@ export default function SearchPage() {
   const [isUTC, setIsUTC] = useState(false);
   const {
     isReady,
-    isLive,
     searchedTimeRange,
     displayedTimeInputValue,
     setDisplayedTimeInputValue,
     onSearch,
-    setIsLive,
     onTimeRangeSelect,
-  } = useTimeQuery({ isUTC });
+  } = useNewTimeQuery({
+    isUTC,
+    initialDisplayValue: LIVE_TAIL_TIME_QUERY,
+    initialTimeRange: getLiveTailTimeRange(),
+  });
+  // We want to initialize the search page with live tail unless a `tq`
+  // param is passed in.
+  const { isLive, setIsLive } = useLiveTail({
+    initialValue: router.query.tq != null,
+    // initialValue: !getQueryParams().has('tq'),
+    setTimeRange: onTimeRangeSelect,
+  });
+
+  const userDisplayedTimeInputValue = isLive
+    ? LIVE_TAIL_TIME_QUERY
+    : displayedTimeInputValue;
 
   const [_searchedQuery, setSearchedQuery] = useQueryParam(
     'q',
@@ -631,6 +655,10 @@ export default function SearchPage() {
     setResultsMode('search');
   }, [setResultsMode]);
 
+  const setSearchInputTimeRangeValue = useCallback(value => {
+    setDisplayedTimeInputValue;
+  }, []);
+
   return (
     <div className="LogViewerPage d-flex" style={{ height: '100vh' }}>
       <Head>
@@ -705,8 +733,18 @@ export default function SearchPage() {
               style={{ maxWidth: 360, height: 36 }}
             >
               <SearchTimeRangePicker
-                inputValue={displayedTimeInputValue}
-                setInputValue={setDisplayedTimeInputValue}
+                inputValue={userDisplayedTimeInputValue}
+                setInputValue={value => {
+                  // If the value gets set to the live tail time query, then
+                  // set isLive to true
+                  if (value === LIVE_TAIL_TIME_QUERY) {
+                    setIsLive(true);
+                  } else {
+                    setIsLive(false);
+                  }
+
+                  setSearchInputTimeRangeValue(value);
+                }}
                 onSearch={rangeStr => {
                   doSearch(displayedSearchQuery, rangeStr);
                 }}
